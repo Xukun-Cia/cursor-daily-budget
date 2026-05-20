@@ -1,0 +1,4 @@
+probe-results.json
+.cursor/
+*.log
+.DS_Store
