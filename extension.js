@@ -78,7 +78,8 @@ async function fetchAndCompute() {
     };
   }
 
-  const apiBudget = calculateDailyBudget(apiPercent, resetDate);
+  const cycleEnd = summary?.billingCycleEnd ?? resetDate;
+  const apiBudget = calculateDailyBudget(apiPercent, cycleEnd);
   const workdayTimeInfo = getWorkdayTimeInfo(new Date());
 
   return {
@@ -133,7 +134,8 @@ function updateStatusBar(data) {
   statusBarDays.text = `$(calendar) ${remainingDays.toFixed(2)} day`;
   statusBarUsed.text = `${icon} API ${fmtPct(data.apiPercent)}`;
   statusBarToday.text = `$(history) ${formatTodayUsageStatusBar(data.todayApiUsage)}`;
-  statusBarDaily.text = `$(graph) 日估 ${dailyBudget.toFixed(2)}%/d`;
+  const dailyLabel = data.apiBudget.isLastStretch ? '剩余' : '日估';
+  statusBarDaily.text = `$(graph) ${dailyLabel} ${dailyBudget.toFixed(2)}%${data.apiBudget.isLastStretch ? '' : '/d'}`;
 
   for (const item of items) {
     item.tooltip = tooltip;
