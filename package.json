@@ -2,7 +2,7 @@
   "name": "cursor-daily-budget",
   "displayName": "Cursor Daily Budget",
   "description": "自动追踪 Cursor API 用量、工作日每日预算与今日 API 消耗",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
