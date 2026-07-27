@@ -9,18 +9,30 @@ Cursor / VS Code 状态栏扩展：自动拉取 Cursor 订阅用量，按**中�
 | 项 | 示例 | 说明 |
 |---|---|---|
 | 剩余工作日 | `10.52 day` | 到重置日前的 fractional 工作日 |
-| API 用量 | `API 44.99%` | 本计费周期 API 池已用百分比 |
-| 今日用量 | `今日 2.81%` | 当日 9:00 → 次日 9:00 的 API 消耗（占 $500 池） |
+| API 用量 | `API 44.99%` | 本计费周期 Other Models（API）池已用百分比 |
+| 今日用量 | `今日 2.81%` | 当日 9:00 至次日 9:00 的 API 消耗（占 API 池） |
 | 日估 | `日估 5.23%/d` | 剩余 API 额度 ÷ 剩余工作日；最后不足 1 个工作日时按剩余全额计，且保证日估+已用 ≤ 100% |
 
-悬停可查看额度金额、计费周期、Auto 用量等详情。
+悬停可查看额度金额、计费周期、Cursor Models（Auto）用量、套餐 included/bonus 等详情。
+
+### 用量口径（Ultra）
+
+与 Dashboard 百分比条对齐（由 usage events 反推验证）：
+
+| 池 | 百分比分母 | 说明 |
+|---|---|---|
+| Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
+| Cursor Models（Auto） | **$2000** | Auto / Composer / Grok 4.5 / Vega |
+| 合计 | **$2500** | 对应 `totalPercentUsed` |
+
+`plan.limit` / `includedAmountCents`（Ultra 为 **$400**）是套餐「included」购买额度，到顶后会提示 hit usage limit，并可能继续吃 bonus；它与上方百分比条分母不是同一口径。
 
 ### 自动抓取
 
 - 从 Cursor 本地登录态读取 token，调用非官方 Dashboard API
 - 主接口：`GET cursor.com/api/usage-summary`（Ultra 等按用量计费计划）
-- 备用：`api2.cursor.sh` Connect RPC
-- 今日 API 用量：按 usage events 汇总，排除 First-party 池模型（Auto / Composer / Grok 4.5 / Vega）
+- 备用：`api2.cursor.sh` Connect RPC（含 `autoBucketModels`）
+- 今日 API 用量：按 usage events 汇总，排除 Cursor Models 池（Auto / Composer / Grok 4.5 / Vega）
 
 ### 工作日计算
 
