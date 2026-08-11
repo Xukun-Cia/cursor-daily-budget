@@ -13,6 +13,7 @@ const PRICING = {
   'opus-4.6-max': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'opus-4.6-high': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'opus-5-high': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
+  'opus-5-medium': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'composer-2.5-fast': { input: 0.5, cacheWrite: 0, cacheRead: 0.2, output: 2.5 },
   'grok-4.5': { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
   'default': { input: 1.25, cacheWrite: 1.25, cacheRead: 0.25, output: 6 },
@@ -107,6 +108,7 @@ function alias(model) {
     'claude-4.6-opus-high-thinking': 'opus-4.6-high',
     'claude-4.6-opus-max-thinking': 'opus-4.6-max',
     'claude-opus-5-thinking-high': 'opus-5-high',
+    'claude-opus-5-thinking-medium': 'opus-5-medium',
   };
   return map[model] || model;
 }
@@ -237,21 +239,15 @@ function costParts(name, tu) {
     .sort((a, b) => b.tokens - a.tokens);
 
   const prev = [
-    { name: 'grok-4.5', tokens: 513328276, usagePct: 29.09139 },
-    { name: 'opus-5-high', tokens: 135194603, usagePct: 20.88841 },
-    { name: 'gpt-5.6-sol-high', tokens: 85675382, usagePct: 14.7445 },
-    { name: 'fable-5-xhigh', tokens: 80855260, usagePct: 30.83436 },
-    { name: 'composer-2.5-fast', tokens: 61811686, usagePct: 2.56171 },
-    { name: 'fable-5-high', tokens: 43121764, usagePct: 20.03478 },
-    { name: 'fable-5-max', tokens: 21661443, usagePct: 8.5433 },
-    { name: 'gpt-5.5-medium', tokens: 7197685, usagePct: 1.42804 },
-    { name: 'opus-4.6-high', tokens: 5326616, usagePct: 1.92712 },
-    { name: 'opus-4.6-max', tokens: 3334289, usagePct: 1.15461 },
-    { name: 'gpt-5.6-sol-medium', tokens: 2976617, usagePct: 0.6153 },
-    { name: 'default', tokens: 2613240, usagePct: 0.06455 },
+    { name: 'grok-4.5', tokens: 75839367, usagePct: 5.32489 },
+    { name: 'opus-5-high', tokens: 21401883, usagePct: 4.24818 },
+    { name: 'opus-5-medium', tokens: 6289116, usagePct: 1.39348 },
+    { name: 'fable-5-xhigh', tokens: 228476, usagePct: 0.35034 },
+    { name: 'claude-opus-4-8-thinking-high', tokens: 267073, usagePct: 0 },
+    { name: 'composer-2.5-fast', tokens: 0, usagePct: 0 },
   ];
   // 上次快照的 User API（不进 MODELS，更新回复仍须单独说明）
-  const prevUserApi = { usd: 47.92939221858978, events: 32 };
+  const prevUserApi = { usd: 0, events: 0 };
 
   const rank = (arr) =>
     arr
