@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install / sync Cursor Daily Budget extension to local Cursor
-VERSION="0.8.0"
-for ver in 0.1.0 0.2.0 0.3.0 0.3.1 0.4.0 0.5.0 0.5.1 0.5.2 0.5.3 0.5.4 0.6.0 0.6.1 0.6.2 0.6.3 0.6.4 0.7.0; do
+VERSION="0.8.1"
+for ver in 0.1.0 0.2.0 0.3.0 0.3.1 0.4.0 0.5.0 0.5.1 0.5.2 0.5.3 0.5.4 0.6.0 0.6.1 0.6.2 0.6.3 0.6.4 0.7.0 0.8.0; do
   [ -d "$HOME/.cursor/extensions/local.cursor-daily-budget-$ver" ] && \
     rm -rf "$HOME/.cursor/extensions/local.cursor-daily-budget-$ver"
 done

@@ -16,6 +16,7 @@ const PRICING = {
   'opus-5-medium': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'composer-2.5-fast': { input: 0.5, cacheWrite: 0, cacheRead: 0.2, output: 2.5 },
   'grok-4.5': { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
+  'grok-4.6': { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
   'default': { input: 1.25, cacheWrite: 1.25, cacheRead: 0.25, output: 6 },
 };
 
@@ -97,9 +98,10 @@ async function fetchAll(sessionToken, startMs, endMs) {
 
 function alias(model) {
   if (model === 'default') return 'default';
+  const grok = model.match(/(?:^|-)grok-(\d+\.\d+)/);
+  if (grok) return `grok-${grok[1]}`;
   if (model.startsWith('composer-2.5')) return 'composer-2.5-fast';
   if (model.startsWith('composer-')) return model;
-  if (model.includes('grok-4.5') || model.startsWith('cursor-grok')) return 'grok-4.5';
   if (model.startsWith('vega')) return model;
   const map = {
     'claude-fable-5-thinking-xhigh': 'fable-5-xhigh',
@@ -116,7 +118,7 @@ function alias(model) {
 function isCursorModel(model, autoBucketSet) {
   if (autoBucketSet.has(model)) return true;
   if (model === 'default' || model.startsWith('composer-') || model.startsWith('vega')) return true;
-  if (model.includes('grok-4.5') || model.startsWith('cursor-grok-')) return true;
+  if (/(?:^|-)grok-\d+\.\d+/.test(model) || model.startsWith('cursor-grok-')) return true;
   return false;
 }
 
@@ -151,17 +153,9 @@ function costParts(name, tu) {
   };
 }
 
-(async () => {
-  const t = readTokenFromDb();
-  if (t.error) throw Error(t.error);
-  const u = await fetchUsageData(t.sessionToken, t.userId, t.accessToken);
-  const s = u.summary;
-  const startMs = Date.parse(s.billingCycleStart);
-  const endMs = Date.parse(s.billingCycleEnd);
-  const period = await post('/api/dashboard/get-current-period-usage', t.sessionToken, {});
-  const autoBucketSet = new Set(period.autoBucketModels || []);
-  const { all, total } = await fetchAll(t.sessionToken, startMs, endMs);
+const VALUE_MIN_USAGE_PCT = 0.5;
 
+function aggregateEvents(all, autoBucketSet) {
   const spend = { api: 0, cursorModels: 0, userApi: 0, userApiEvents: 0, fallbackEvents: 0 };
   const by = new Map();
 
@@ -214,13 +208,11 @@ function costParts(name, tu) {
       row.costCacheWrite += parts.cacheWrite * scale;
     }
   }
+  return { spend, by };
+}
 
-  const autoPct = period.planUsage?.autoPercentUsed ?? s.autoPercentUsed;
-  const apiLimitUsd = (s.apiLimitCents || 50000) / 100;
-  const cursorLimitUsd = autoPct > 0 ? spend.cursorModels / (autoPct / 100) : 2000;
-  const cursorLimitRounded = Math.round(cursorLimitUsd / 100) * 100;
-
-  const models = [...by.values()]
+function toModels(by, apiLimitUsd, cursorLimitRounded) {
+  return [...by.values()]
     .map((m) => {
       const limitUsd = m.pool === 'auto' ? cursorLimitRounded : apiLimitUsd;
       const usagePct = ((m.cents / 100) / limitUsd) * 100;
@@ -237,14 +229,78 @@ function costParts(name, tu) {
       };
     })
     .sort((a, b) => b.tokens - a.tokens);
+}
+
+function valueBoard(models) {
+  return models
+    .filter((m) => m.usagePct >= VALUE_MIN_USAGE_PCT)
+    .map((m) => ({
+      name: m.name,
+      usagePct: m.usagePct,
+      tokens: m.tokens,
+      tokensPer1Pct: m.tokens / m.usagePct,
+    }))
+    .sort((a, b) => b.tokensPer1Pct - a.tokensPer1Pct)
+    .map((m, i) => ({ ...m, rank: i + 1 }));
+}
+
+function fmtDay(isoOrMs) {
+  const d = new Date(isoOrMs);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+(async () => {
+  const t = readTokenFromDb();
+  if (t.error) throw Error(t.error);
+  const u = await fetchUsageData(t.sessionToken, t.userId, t.accessToken);
+  const s = u.summary;
+  const startMs = Date.parse(s.billingCycleStart);
+  const endMs = Date.parse(s.billingCycleEnd);
+  const period = await post('/api/dashboard/get-current-period-usage', t.sessionToken, {});
+  const autoBucketSet = new Set(period.autoBucketModels || []);
+  const { all, total } = await fetchAll(t.sessionToken, startMs, endMs);
+
+  const { spend, by } = aggregateEvents(all, autoBucketSet);
+
+  const autoPct = period.planUsage?.autoPercentUsed ?? s.autoPercentUsed;
+  const apiLimitUsd = (s.apiLimitCents || 50000) / 100;
+  const cursorLimitUsd = autoPct > 0 ? spend.cursorModels / (autoPct / 100) : 2000;
+  const cursorLimitRounded = Math.round(cursorLimitUsd / 100) * 100;
+
+  const models = toModels(by, apiLimitUsd, cursorLimitRounded);
+  const rawModels = [...new Set(all.map((e) => e.model).filter(Boolean))].sort();
+  const unaliasedRaw = rawModels.filter((m) => alias(m) === m && !PRICING[m]);
+
+  // 上一计费周期（等长回推），用于性价比参考标注
+  const cycleLen = endMs - startMs;
+  const prevStartMs = startMs - cycleLen;
+  const prevEndMs = startMs;
+  const { all: prevAll } = await fetchAll(t.sessionToken, prevStartMs, prevEndMs);
+  const prevAgg = aggregateEvents(prevAll, autoBucketSet);
+  // 上周期 Cursor Models 池按 Ultra 惯例 $2000（上周期末 Auto%≈32.5% 反推一致）
+  const prevModels = toModels(prevAgg.by, apiLimitUsd, 2000);
+  const prevValueBoard = valueBoard(prevModels);
+  const prevCycleValue = Object.fromEntries(
+    prevValueBoard.map((m) => [
+      m.name,
+      { rank: m.rank, tokensPer1Pct: +m.tokensPer1Pct.toFixed(2), usagePct: m.usagePct },
+    ]),
+  );
+  const prevCycleLabel = `${fmtDay(prevStartMs)} – ${fmtDay(prevEndMs)}`;
 
   const prev = [
-    { name: 'grok-4.5', tokens: 75839367, usagePct: 5.32489 },
-    { name: 'opus-5-high', tokens: 21401883, usagePct: 4.24818 },
+    { name: 'grok-4.5', tokens: 213323329, usagePct: 14.71052 },
+    { name: 'grok-4.6', tokens: 24789490, usagePct: 0.88189 },
+    { name: 'opus-5-high', tokens: 23237673, usagePct: 5.08273 },
+    { name: 'fable-5-high', tokens: 11182900, usagePct: 5.64248 },
     { name: 'opus-5-medium', tokens: 6289116, usagePct: 1.39348 },
-    { name: 'fable-5-xhigh', tokens: 228476, usagePct: 0.35034 },
+    { name: 'fable-5-xhigh', tokens: 1882744, usagePct: 2.03969 },
+    { name: 'opus-4.6-max', tokens: 1190364, usagePct: 0.3658 },
+    { name: 'opus-4.6-high', tokens: 290829, usagePct: 0.17544 },
     { name: 'claude-opus-4-8-thinking-high', tokens: 267073, usagePct: 0 },
-    { name: 'composer-2.5-fast', tokens: 0, usagePct: 0 },
   ];
   // 上次快照的 User API（不进 MODELS，更新回复仍须单独说明）
   const prevUserApi = { usd: 0, events: 0 };
@@ -317,6 +373,11 @@ function costParts(name, tu) {
     prevRank: prevRank.map((x) => `${x.rank}.${x.name}`),
     currRank: currRank.map((x) => `${x.rank}.${x.name}`),
     rankChanges,
+    prevCycleLabel,
+    prevCycleValue,
+    rawModels,
+    unaliasedRaw,
+    newDisplayNames: models.filter((m) => !prev.some((p) => p.name === m.name) && (m.tokens > 0 || m.cents > 0)).map((m) => m.name),
     models,
   };
   console.log(JSON.stringify(summary, null, 2));
@@ -329,14 +390,7 @@ function costParts(name, tu) {
     '/home/ai-group/.cursor/projects/empty-window/canvases/cursor-model-value.canvas.tsx';
   if (fs.existsSync(canvasPath)) {
     let src = fs.readFileSync(canvasPath, 'utf8');
-    const fmt = (iso) => {
-      const d = new Date(iso);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-    const cycle = `${fmt(s.billingCycleStart)} – ${fmt(s.billingCycleEnd)}`;
+    const cycle = `${fmtDay(s.billingCycleStart)} – ${fmtDay(s.billingCycleEnd)}`;
     const modelsForCanvas = models.filter((m) => m.tokens > 0 || m.cents > 0);
     const modelsLit = modelsForCanvas
       .map(
@@ -344,9 +398,15 @@ function costParts(name, tu) {
           `  { name: "${m.name}", pool: "${m.pool}", tokens: ${m.tokens}, usagePct: ${m.usagePct}, cents: ${m.cents}, costInput: ${m.costInput}, costOutput: ${m.costOutput}, costCacheRead: ${m.costCacheRead}, costCacheWrite: ${m.costCacheWrite} },`,
       )
       .join('\n');
+    const prevLit = Object.entries(prevCycleValue)
+      .map(
+        ([name, v]) =>
+          `  "${name}": { rank: ${v.rank}, tokensPer1Pct: ${v.tokensPer1Pct}, usagePct: ${v.usagePct} },`,
+      )
+      .join('\n');
     src = src.replace(
       /const META = \{[\s\S]*?\n\};/,
-      `const META = {\n  cycle: "${cycle}",\n  updatedAt: "${updatedAt}",\n  source: "usage-events · 官方 $/M 定价分摊",\n};`,
+      `const META = {\n  cycle: "${cycle}",\n  prevCycle: "${prevCycleLabel}",\n  updatedAt: "${updatedAt}",\n  source: "usage-events · 官方 $/M 定价分摊",\n};`,
     );
     src = src.replace(
       /const USAGE_SPEND_USD = \{[\s\S]*?\n\};/,
@@ -356,10 +416,23 @@ function costParts(name, tu) {
       /const POOL_LIMIT_USD = \{[\s\S]*?\} as const;/,
       `const POOL_LIMIT_USD = {\n  api: ${apiLimitUsd},\n  cursorModels: ${cursorLimitRounded},\n  // User API 无池上限，环心只展示金额\n} as const;`,
     );
-    src = src.replace(
-      /const MODELS: ModelRow\[\] = \[[\s\S]*?\];/,
-      `const MODELS: ModelRow[] = [\n${modelsLit}\n];`,
-    );
+    const modelsBlock = `const MODELS: ModelRow[] = [\n${modelsLit}\n];`;
+    const prevBlock = `/** 上一计费周期性价比榜（Usage%≥${VALUE_MIN_USAGE_PCT}）；当前上榜且上月有数据时展示参考 */\nconst PREV_CYCLE_VALUE: Record<string, { rank: number; tokensPer1Pct: number; usagePct: number }> = {\n${prevLit}\n};`;
+    src = src.replace(/const MODELS: ModelRow\[\] = \[[\s\S]*?\];/, modelsBlock);
+    // 精确替换 PREV_CYCLE_VALUE 对象体，避免误吞后续 COST_TYPES / VENDOR_SORT
+    const prevRe =
+      /const PREV_CYCLE_VALUE: Record<string, \{ rank: number; tokensPer1Pct: number; usagePct: number \}> = \{[\s\S]*?\n\};/;
+    const prevAssign = `const PREV_CYCLE_VALUE: Record<string, { rank: number; tokensPer1Pct: number; usagePct: number }> = {\n${prevLit}\n};`;
+    if (prevRe.test(src)) {
+      src = src.replace(prevRe, prevAssign);
+    } else if (/const PREV_CYCLE_VALUE: Record<string, \{ rank: number; tokensPer1Pct: number; usagePct: number \}> = \{\};/.test(src)) {
+      src = src.replace(
+        /const PREV_CYCLE_VALUE: Record<string, \{ rank: number; tokensPer1Pct: number; usagePct: number \}> = \{\};/,
+        prevAssign,
+      );
+    } else {
+      src = src.replace(modelsBlock, `${modelsBlock}\n\n${prevBlock}`);
+    }
     fs.writeFileSync(canvasPath, src);
     console.log('\n// WROTE_CANVAS', canvasPath);
   } else {

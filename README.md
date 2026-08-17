@@ -22,7 +22,7 @@ Cursor / VS Code 状态栏扩展：自动拉取 Cursor 订阅用量，按**中�
 | 池 | 百分比分母 | 说明 |
 |---|---|---|
 | Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
-| Cursor Models（Auto） | **$2000** | Auto / Composer / Grok 4.5 / Vega |
+| Cursor Models（Auto） | **$2000** | Auto / Composer / Grok / Vega |
 | 合计 | **$2500** | 对应 `totalPercentUsed` |
 
 `plan.limit` / `includedAmountCents`（Ultra 为 **$400**）是套餐「included」购买额度，到顶后会提示 hit usage limit，并可能继续吃 bonus；它与上方百分比条分母不是同一口径。
@@ -32,7 +32,7 @@ Cursor / VS Code 状态栏扩展：自动拉取 Cursor 订阅用量，按**中�
 - 从 Cursor 本地登录态读取 token，调用非官方 Dashboard API
 - 主接口：`GET cursor.com/api/usage-summary`（Ultra 等按用量计费计划）
 - 备用：`api2.cursor.sh` Connect RPC（含 `autoBucketModels`）
-- 今日 API 用量：按 usage events 汇总，排除 Cursor Models 池（Auto / Composer / Grok 4.5 / Vega）
+- 今日 API 用量：按 usage events 汇总，排除 Cursor Models 池（Auto / Composer / Grok / Vega）
 
 ### 工作日计算
 
