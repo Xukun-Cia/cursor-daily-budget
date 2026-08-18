@@ -14,6 +14,7 @@ const PRICING = {
   'opus-4.6-high': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'opus-5-high': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'opus-5-medium': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
+  'opus-5-max': { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
   'composer-2.5-fast': { input: 0.5, cacheWrite: 0, cacheRead: 0.2, output: 2.5 },
   'grok-4.5': { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
   'grok-4.6': { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
@@ -111,6 +112,7 @@ function alias(model) {
     'claude-4.6-opus-max-thinking': 'opus-4.6-max',
     'claude-opus-5-thinking-high': 'opus-5-high',
     'claude-opus-5-thinking-medium': 'opus-5-medium',
+    'claude-opus-5-thinking-max': 'opus-5-max',
   };
   return map[model] || model;
 }
@@ -292,12 +294,13 @@ function fmtDay(isoOrMs) {
   const prevCycleLabel = `${fmtDay(prevStartMs)} – ${fmtDay(prevEndMs)}`;
 
   const prev = [
+    { name: 'grok-4.6', tokens: 234393744, usagePct: 7.55851 },
     { name: 'grok-4.5', tokens: 213323329, usagePct: 14.71052 },
-    { name: 'grok-4.6', tokens: 24789490, usagePct: 0.88189 },
-    { name: 'opus-5-high', tokens: 23237673, usagePct: 5.08273 },
+    { name: 'opus-5-high', tokens: 28744220, usagePct: 6.69021 },
     { name: 'fable-5-high', tokens: 11182900, usagePct: 5.64248 },
     { name: 'opus-5-medium', tokens: 6289116, usagePct: 1.39348 },
-    { name: 'fable-5-xhigh', tokens: 1882744, usagePct: 2.03969 },
+    { name: 'fable-5-xhigh', tokens: 5805964, usagePct: 3.67847 },
+    { name: 'opus-5-max', tokens: 4671099, usagePct: 1.45548 },
     { name: 'opus-4.6-max', tokens: 1190364, usagePct: 0.3658 },
     { name: 'opus-4.6-high', tokens: 290829, usagePct: 0.17544 },
     { name: 'claude-opus-4-8-thinking-high', tokens: 267073, usagePct: 0 },
